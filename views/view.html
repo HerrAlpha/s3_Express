@@ -1,3 +1,27 @@
+<script>
+  // get the percentage of the file upload
+  const percentage = document.getElementById('percentage');
+  const form = document.querySelector('form');
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const formData = new FormData(form);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/upload', true);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const percentComplete = (e.loaded / e.total) * 100;
+        percentage.innerHTML = `${percentComplete.toFixed(2)}%`;
+      }
+    };
+    xhr.onload = (e) => {
+      if (xhr.status === 200) {
+        console.log(xhr.responseText);
+      }
+    };
+    xhr.send(formData);
+  });
+</script>
+
 <h1>Upload File</h1>
 <form action="/upload" method="POST" enctype="multipart/form-data">
   <label for="author">Author UUID:</label><br>
@@ -6,3 +30,4 @@
   <input type="file" id="file" name="file"><br>
   <button type="submit">Upload</button>
 </form>
+<div id="percentage"></div>
