@@ -1,7 +1,7 @@
 const express = require('express');
 const connectToDatabase = require('./database/database');
 const router = require('./route/route');
-
+const bodyParser = require('body-parser');
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -17,6 +17,10 @@ connectToDatabase()
   .catch((error) => {
     console.error('Failed to connect to MongoDB:', error);
   });
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false
+ }));
 
 // Serve static files (e.g., HTML)
 app.use(express.static('views'));

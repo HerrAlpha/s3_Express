@@ -1,5 +1,9 @@
 const { Parent, Chunk } = require('../../model/file');
 const { Readable } = require('stream');
+const { get200, delete200, get404, post201, get422, get401 } = require('../../library/response-library');
+const { post } = require('../../route/route');
+const { encrypt, decrypt } = require('../../security/encryption');
+const { text } = require('express');
 
 const uploadFile = async (req, res) => {
   console.log('Preparing to upload file...')
@@ -46,11 +50,18 @@ const uploadFile = async (req, res) => {
 
     console.log('File upload complete')
 
+    // const text = String(parent._id);
+    // encrypta = encrypt(text, author);
+    // decrypta = decrypt(encrypta, author);
+
+    // console.log('Encrypted:', encrypta);
+    // console.log('Decrypted:', decrypta);
+
     // Send the response after the upload is complete
-    res.send('File uploaded successfully');
+    res.status(201).send(post201(parent._id));
   } catch (error) {
     console.error('Failed to upload file:', error);
-    res.status(500).send('Failed to upload file');
+    res.status(422).send(get422());
   }
 };
 
@@ -60,7 +71,7 @@ const uploadPrecentageNotif = (uploadPercentage) => {
 
 const downloadFile = async (req, res) => {
   try {
-    const { fileId } = req.params;
+    const { fileId, author } = req.body;
 
     // Find the parent document
     const parent = await Parent.findById(fileId);
