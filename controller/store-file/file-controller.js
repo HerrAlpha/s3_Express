@@ -4,8 +4,14 @@ const { get200, delete200, get404, post201, get422, get401 } = require('../../li
 const { post } = require('../../route/route');
 const { encrypt, decrypt } = require('../../security/encryption');
 const { text } = require('express');
+const { checkTokenWithAuthorizationUser } = require('../../security/token-checking');
 
 const uploadFile = async (req, res) => {
+
+  if (checkTokenWithAuthorizationUser(req.body.author, req, res) === false) {
+    return res.status(401).send(get401());
+  }
+
   console.log('Preparing to upload file...')
   try {
     const { author } = req.body;
@@ -68,10 +74,22 @@ const uploadFile = async (req, res) => {
 const uploadPrecentageNotif = (uploadPercentage) => {
   console.log(`Uploaded ${uploadPercentage}%`);
 }
-
 const downloadFile = async (req, res) => {
   try {
-    const { fileId, author } = req.body;
+    const author = req.body.author;
+
+    // Check if authorization token exists
+    const authorizationToken = req.headers['authorization'];
+    if (!authorizationToken) {
+      return res.status(401).send(get401());
+    }
+
+    // Validate authorization token
+    if (!checkTokenWithAuthorizationUser(author, req, res)) {
+      return res.status(401).send(get401());
+    }
+
+    const { fileId } = req.params;
 
     // Find the parent document
     const parent = await Parent.findById(fileId);
@@ -116,6 +134,7 @@ const downloadFile = async (req, res) => {
     res.status(500).send('Failed to download file');
   }
 };
+
 
 module.exports = { uploadFile, downloadFile };
 

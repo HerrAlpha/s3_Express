@@ -4,7 +4,7 @@ const { uploadFile, downloadFile } = require('../controller/store-file/file-cont
 const router = express.Router();
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
-const { login, register } = require('../controller/authentication/auth-controller')
+const { login, register, logout } = require('../controller/authentication/auth-controller')
 
 // Define routes
 router.post('/upload', upload.single('file'), uploadFile);
@@ -18,5 +18,6 @@ router.get('/download/:fileId', downloadFile);
 
 router.post('/login', login);
 router.post('/register', register);
+router.post('/logout', logout);
 
 module.exports = router;
