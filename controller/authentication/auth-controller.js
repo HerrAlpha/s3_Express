@@ -49,7 +49,16 @@ const login = async (req, res) => {
     }
 
     try {
-        const user = await Users.findOne({ username: username, password: password });
+        const user = await Users.findOne({ username: username });
+        console.log('password:', user.password);
+        const decryptedPassword = decrypt(user.password, user.username);
+        console.log('Decrypted password:', decryptedPassword);
+
+        if (decryptedPassword !== password) {
+            return res.json(get401());
+        }
+
+
         if (!user) {
             return res.json(get401()); // User not found, return 401
         }
@@ -79,10 +88,14 @@ const login = async (req, res) => {
 
 const register = async (req, res) => {
     const { username, password } = req.body;
+    if (!checkApiKey(req, res)) {
+        return res.status(401).json(get401());
+    }
+    
     try {
         const keyUsername = String(username);
         const encryptedPassword = encrypt(password, keyUsername);
-        const newUser = new User({ 
+        const newUser = new Users({ 
             username: keyUsername,
             password: encryptedPassword
          });

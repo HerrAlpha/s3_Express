@@ -21,16 +21,19 @@ const checkTokenWithAuthorizationUser = async (userId, req, res, next) => {
             return false;
         }
 
-        const token = await Tokens.findOne({ _id: userId });
+        const token = await Tokens.findOne({ userId: userId });
 
-        if (!token) {
+        console.log('Token from database:', token);
+
+        if (token === null || !reqToken) {
             return false;
         }
 
         const finalToken = reqToken.split(' ')[1];
         const decryptedToken = decrypt(token.token, userId);
+        console.log('Decrypted token:', decryptedToken);
 
-        if (reqApiKey === apiKey && token.userId === userId && token.ability === 'user' && finalToken === decryptedToken) {
+        if (reqApiKey == apiKey && token.userId == userId && token.ability == 'user' && finalToken == decryptedToken) {
             return true;
         } else {
             return false;

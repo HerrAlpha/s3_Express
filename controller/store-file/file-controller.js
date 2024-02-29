@@ -76,16 +76,18 @@ const uploadPrecentageNotif = (uploadPercentage) => {
 }
 const downloadFile = async (req, res) => {
   try {
-    const author = req.body.author;
+    const {author} = req.body;
+    console.log('Author:', author);
 
     // Check if authorization token exists
-    const authorizationToken = req.headers['authorization'];
+    const authorizationToken = await req.headers['authorization'];
     if (!authorizationToken) {
       return res.status(401).send(get401());
     }
 
     // Validate authorization token
-    if (!checkTokenWithAuthorizationUser(author, req, res)) {
+    if (checkTokenWithAuthorizationUser(author, req, res) == false){
+      console.log('Token validation failed');
       return res.status(401).send(get401());
     }
 
