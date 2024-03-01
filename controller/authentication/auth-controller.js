@@ -1,12 +1,12 @@
 const { User, create } = require('../../model/user');
-const { postLogin201, post201, get401, get200 } = require('../../library/response-library');
+const { postLogin201, post201, get401, get200, get422 } = require('../../library/response-library');
 const { encrypt, decrypt } = require('../../security/encryption');
 const Users = require('../../model/user');
 const { Tokens } = require('../../model/personal-token');
 const jwt = require('jsonwebtoken');
 const { checkApiKey, deleteCurrentToken, checkTokenWithAuthorizationUser } = require('../../security/token-checking');
 
-const createToken1 = async (userId, ability, res) => {
+const createToken = async (userId, ability, res) => {
     try {
         // Check if token already exists for the user
         const existingToken = await Tokens.findOne({ userId: userId });
@@ -72,7 +72,7 @@ const login = async (req, res) => {
         }
 
         // Create a new token if none exists for the user
-        const token = await createToken1(user._id, 'user', res);
+        const token = await createToken(user._id, 'user', res);
         if (!token) {
             console.log('Token creation failed');
             return res.status(500).json({ error: 'Internal Server Error' }); // Token creation failed, return 500
@@ -85,27 +85,40 @@ const login = async (req, res) => {
         return res.json({ error: 'Internal Server Error' });
     }
 }
-
 const register = async (req, res) => {
     const { username, password } = req.body;
-    if (!checkApiKey(req, res)) {
-        return res.status(401).json(get401());
-    }
-    
     try {
-        const keyUsername = String(username);
-        const encryptedPassword = encrypt(password, keyUsername);
-        const newUser = new Users({ 
-            username: keyUsername,
-            password: encryptedPassword
-         });
-        await newUser.save();
-        return res.status(201).json(post201(newUser));
+        // Check API key
+        if (!checkApiKey(req, res)) {
+            return res.status(401).json(get401());
+        }
+        // Check if the user already exists
+        const user = await Users.findOne({ username: username });
+        if (user) {
+            // User already exists
+            console.log("User is already exist");
+            return res.status(422).json(get422());
+        } else {
+            // User does not exist, proceed with registration
+            const keyUsername = String(username);
+            const encryptedPassword = encrypt(password, keyUsername);
+            // Create a new user
+            const newUser = new Users({ 
+                username: keyUsername,
+                password: encryptedPassword
+            });
+            // Save the new user to the database
+            await newUser.save();
+            // Return success response
+            return res.status(201).json(post201(newUser));
+        }
     } catch (error) {
-        console.error('Error during registration:', error);
-        return res.status(500).json({ error: 'Internal Server Error' });
+            // Other internal server error
+            return res.status(500).json({ error: 'Internal Server Error' });
+    
     }
 }
+
 
 const logout = async (req, res) => {
     const userId = req.body.userId;
