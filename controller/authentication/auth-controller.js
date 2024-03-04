@@ -5,6 +5,7 @@ const Users = require('../../model/user');
 const { Tokens } = require('../../model/personal-token');
 const jwt = require('jsonwebtoken');
 const { checkApiKey, deleteCurrentToken, checkTokenWithAuthorizationUser } = require('../../security/token-checking');
+const Validator = require('../../library/validation');
 
 const createToken = async (userId, ability, res) => {
     try {
@@ -41,11 +42,21 @@ const createToken = async (userId, ability, res) => {
 const login = async (req, res) => {
     const { username, password } = req.body;
 
+    const validation = new Validator();
+
+    const validationInput = validation.validate({
+        username: username,
+        password: password
+    }, {
+        username: 'required|string|alpha|between:3,16',
+        password: 'required|string|alpha_num|between:8,16'
+    }, res);
+
     if (!username || !password) {
-        return res.json(get401());
+        return get401(res);
     }
     if (!checkApiKey(req, res)) {
-        return res.status(401).json(get401());
+        return get401(res);
     }
 
     try {
@@ -55,12 +66,12 @@ const login = async (req, res) => {
         console.log('Decrypted password:', decryptedPassword);
 
         if (decryptedPassword !== password) {
-            return res.json(get401());
+            return get401(res);
         }
 
 
         if (!user) {
-            return res.json(get401()); // User not found, return 401
+            return get401(res); // User not found, return 401
         }
 
         // Check if token already exists for the user
@@ -68,54 +79,53 @@ const login = async (req, res) => {
 
         if (existingToken) {
             console.log('Token already exists for the user');
-            return res.status(401).json(get401()); // Token already exists, return 401
+            return get401(res); // Token already exists, return 401
         }
 
         // Create a new token if none exists for the user
         const token = await createToken(user._id, 'user', res);
         if (!token) {
             console.log('Token creation failed');
-            return res.status(500).json({ error: 'Internal Server Error' }); // Token creation failed, return 500
+            return get422(res, 'Token failed to retrieve'); // Token creation failed, return 500
         }
 
         console.log('Token:', token);
-        return res.json(postLogin201(user, token));
+        return postLogin201(res, user, token);
     } catch (error) {
         console.error('Error during login:', error);
-        return res.json({ error: 'Internal Server Error' });
+        return get401(res);
     }
 }
 const register = async (req, res) => {
+
     const { username, password } = req.body;
-    try {
-        // Check API key
-        if (!checkApiKey(req, res)) {
-            return res.status(401).json(get401());
-        }
-        // Check if the user already exists
-        const user = await Users.findOne({ username: username });
-        if (user) {
-            // User already exists
-            console.log("User is already exist");
-            return res.status(422).json(get422());
-        } else {
-            // User does not exist, proceed with registration
-            const keyUsername = String(username);
-            const encryptedPassword = encrypt(password, keyUsername);
-            // Create a new user
-            const newUser = new Users({ 
-                username: keyUsername,
-                password: encryptedPassword
-            });
-            // Save the new user to the database
-            await newUser.save();
-            // Return success response
-            return res.status(201).json(post201(newUser));
-        }
-    } catch (error) {
-            // Other internal server error
-            return res.status(500).json({ error: 'Internal Server Error' });
+
+    const validation = new Validator();
+
+    const validationInput = validation.validate({
+        username: username,
+        password: password
+    }, {
+        username: 'required|string|alpha|between:3,16',
+        password: 'required|string|alpha_num|between:8,16'
+    }, res);
+
+    if (!checkApiKey(req, res)) {
+        return get401(res);
+    }
     
+    try {
+        const keyUsername = String(username);
+        const encryptedPassword = encrypt(password, keyUsername);
+        const newUser = new Users({ 
+            username: keyUsername,
+            password: encryptedPassword
+         });
+        await newUser.save();
+        return post201(res, newUser);
+    } catch (error) {
+        console.error('Error during registration:', error);
+        return get422(res, 'User already existed!');
     }
 }
 
@@ -125,14 +135,14 @@ const logout = async (req, res) => {
     const statusToken = await checkTokenWithAuthorizationUser(userId, req, res); // Pass userId, req, res to checkTokenWithAuthorizationUser
     console.log('Status token:', statusToken);
     if (!statusToken) {
-        return res.status(401).json(get401());
+        return get401(res);
     }
     try {
         await deleteCurrentToken(req, userId); // Use await to delete the token
-        return res.status(200).json(get200('User logged out successfully!'));
+        return get200(res, 'User logged out successfully!');
     } catch (error) {
         console.error('Error during logout:', error);
-        return res.status(500).json({ error: 'Internal Server Error' });
+        return get422(res, 'User already logged out!');
     }
 }
 

@@ -9,7 +9,7 @@ const { checkTokenWithAuthorizationUser } = require('../../security/token-checki
 const uploadFile = async (req, res) => {
 
   if (checkTokenWithAuthorizationUser(req.body.author, req, res) === false) {
-    return res.status(401).send(get401());
+    return get401(res);
   }
 
   console.log('Preparing to upload file...')
@@ -64,10 +64,10 @@ const uploadFile = async (req, res) => {
     // console.log('Decrypted:', decrypta);
 
     // Send the response after the upload is complete
-    res.status(201).send(post201(parent._id));
+    return post201(res, parent._id);
   } catch (error) {
     console.error('Failed to upload file:', error);
-    res.status(422).send(get422());
+    return get422(res, 'Failed to upload file');
   }
 };
 
@@ -82,13 +82,13 @@ const downloadFile = async (req, res) => {
     // Check if authorization token exists
     const authorizationToken = await req.headers['authorization'];
     if (!authorizationToken) {
-      return res.status(401).send(get401());
+      return get401(res);
     }
 
     // Validate authorization token
     if (checkTokenWithAuthorizationUser(author, req, res) == false){
       console.log('Token validation failed');
-      return res.status(401).send(get401());
+      return get401(res);
     }
 
     const { fileId } = req.params;
@@ -97,7 +97,7 @@ const downloadFile = async (req, res) => {
     const parent = await Parent.findById(fileId);
     if (!parent) {
       console.log('File not found:', fileId);
-      return res.status(404).send('File not found');
+      return get404(res, 'File not found');
     }
 
     // Set Content-Type header based on the file's contentType
@@ -133,7 +133,7 @@ const downloadFile = async (req, res) => {
 
   } catch (error) {
     console.error('Failed to download file:', error);
-    res.status(500).send('Failed to download file');
+    return get422(res);
   }
 };
 
