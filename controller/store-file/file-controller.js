@@ -5,6 +5,8 @@ const { post } = require('../../route/route');
 const { encrypt, decrypt } = require('../../security/encryption');
 const { text } = require('express');
 const { checkTokenWithAuthorizationUser } = require('../../security/token-checking');
+const Validator = require('../../library/validation');
+const { warning, basic, style, reset } = require('../../library/console-style');
 
 const uploadFile = async (req, res) => {
 
@@ -12,10 +14,46 @@ const uploadFile = async (req, res) => {
     return get401(res);
   }
 
-  console.log('Preparing to upload file...')
-  try {
+  console.log(`${warning.info}  Preparing to upload file...`)
     const { author } = req.body;
+
+    
+   const validation = new Validator();
+
+
+    // FIRST CHECKING VALIDATION
+    validation.validate({
+      author: author,
+      file: req.file,
+    }, {
+      author: 'required|string',
+      file: 'required|file'
+    }, res);
+      
+    if (validation.statusValidation === false) {
+      return get422(res, validation.errorInfo); // Return 422 if validation fails
+    }
     const { originalname, buffer, mimetype } = req.file;
+
+    // SECOND CHECKING VALIDATION
+    validation.validate({
+      author: author,
+      file: req.file,
+      originalname: originalname,
+      buffer: buffer,
+      mimetype: mimetype
+    }, {
+      author: 'required|string',
+      file: 'required|file',
+      originalname: 'required|string',
+      buffer: 'required|file_size:500MB',
+      mimetype: 'required|file_extension:video/mp4,image/jpg,image/jpeg,image/png,application/octet-stream'
+    }, res);
+      
+    if (validation.statusValidation === false) {
+      console.log(`${warning.warn}   Validation failed`);
+      return get422(res, validation.errorInfo); // Return 422 if validation fails
+    }
 
     // Create parent document to store metadata
     const parent = new Parent({
@@ -32,7 +70,7 @@ const uploadFile = async (req, res) => {
     // Calculate the number of chunks
     const numChunks = Math.ceil(buffer.length / chunkSize);
 
-    console.log('Starting to upload file...')
+    console.log(`${warning.info}  Starting to upload file...`)
 
     // Upload each chunk
     for (let i = 0; i < numChunks; i++) {
@@ -54,7 +92,7 @@ const uploadFile = async (req, res) => {
       uploadPrecentageNotif(uploadPercentage);
     }
 
-    console.log('File upload complete')
+    console.log(`${warning.good}   File upload complete`)
 
     // const text = String(parent._id);
     // encrypta = encrypt(text, author);
@@ -65,17 +103,12 @@ const uploadFile = async (req, res) => {
 
     // Send the response after the upload is complete
     return post201(res, parent._id);
-  } catch (error) {
-    console.error('Failed to upload file:', error);
-    return get422(res, 'Failed to upload file');
-  }
 };
 
 const uploadPrecentageNotif = (uploadPercentage) => {
-  console.log(`Uploaded ${uploadPercentage}%`);
+  console.log(`Uploaded ${uploadPercentage}%......${basic.green}✔${reset}`);
 }
 const downloadFile = async (req, res) => {
-  try {
     const {author} = req.body;
     console.log('Author:', author);
 
@@ -87,7 +120,7 @@ const downloadFile = async (req, res) => {
 
     // Validate authorization token
     if (checkTokenWithAuthorizationUser(author, req, res) == false){
-      console.log('Token validation failed');
+      console.log(`${warning.error}   Token validation failed`);
       return get401(res);
     }
 
@@ -131,14 +164,51 @@ const downloadFile = async (req, res) => {
     // Pipe the stream to the response object
     readableStream.pipe(res);
 
-  } catch (error) {
-    console.error('Failed to download file:', error);
-    return get422(res);
+};
+
+const deleteFile = async (req, res) => {
+  const { author, fileId } = req.body;
+
+  const validation = new Validator();
+
+  validation.validate({
+    author: author,
+    fileId: fileId
+  }, {
+    author: 'required|string|alpha_num',
+    fileId: 'required|string|alpha_num'
+  }, res);
+
+  if (validation.statusValidation === false) {
+    return get422(res, validation.errorInfo); // Return 422 if validation fails
   }
+
+  // Check if authorization token exists
+
+  if (checkTokenWithAuthorizationUser(author, req, res) === false) {
+    return get401(res);
+  }
+
+  // Find the parent document
+  const parent = await Parent.findById(fileId);
+  if (!parent) {
+    console.log('File not found:', fileId);
+    return get404(res, 'File not found');
+  }
+
+  // Delete all chunks associated with the parent document
+  await Chunk.deleteMany({ parentId: parent._id });
+
+  // Delete the parent document
+
+  await Parent.findByIdAndDelete(fileId);
+
+  return delete200(res);
+
 };
 
 
-module.exports = { uploadFile, downloadFile };
+module.exports = { uploadFile, downloadFile, deleteFile };
 
 
 

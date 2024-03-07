@@ -6,6 +6,9 @@ class Validator {
         this.errors = {};
     }
 
+    statusValidation;
+    errorInfo;
+
     required(field, value) {
         if (value === undefined || value === null || value === '') {
             this.addError(`The ${field} field is required.`, field);
@@ -88,11 +91,22 @@ class Validator {
     }
 
     // to check file size
-    fileSize(field, value, size) {
-        if (value.size > size) {
-            this.addError(`The ${field} field must be less than ${size} bytes.`, field);
+    fileSize(field, value, size, unit) {
+        const fileSizeBytes = value.length; // Get file size in bytes
+        console.log(`File size in bytes: ${fileSizeBytes}`);
+        // Convert to MB or GB based on validation size unit
+        let fileSize;
+        if (unit === 'MB') {
+            fileSize = fileSizeBytes / (1024 * 1024); // Convert to MB
+        } else if (unit === 'GB') {
+            fileSize = fileSizeBytes / (1024 * 1024 * 1024); // Convert to GB
         }
-    }
+        console.log(`File size in ${unit}: ${fileSize}`);
+        if (fileSize > size) {
+            this.addError(`The ${field} field must be less than ${size}${unit}.`, field);
+        }
+      }
+      
 
     fileExtension(field, value, ext) {
         if (!ext.includes(value)) {
@@ -171,7 +185,9 @@ class Validator {
                         this.file(field, data[field]);
                         break;
                     case 'file_size':
-                        this.fileSize(field, data[field], ruleParam);
+                        // ruleParame like 15MB or 20GB
+                        const [size, unit] = ruleParam.match(/\d+|\D+/g); // [15, 'MB']
+                        this.fileSize(field, data[field], size, unit);
                         break;
                     case 'file_extension':
                         this.fileExtension(field, data[field], ruleParam.split(','));
@@ -184,7 +200,10 @@ class Validator {
 
         if (Object.keys(this.errors).length > 0) {
             const errorMessage = this.errors;
-            return get422(res, errorMessage);
+            console.log('Validation errors:', errorMessage);
+            this.errorInfo = errorMessage;
+            this.statusValidation = false;
+            return this.statusValidation;
         }
 
         const reqBody = {};
@@ -192,6 +211,11 @@ class Validator {
             reqBody[field] = data[field];
         }
         return reqBody;
+    }
+
+    errorResponse(errors) {
+        console.log('Validation errors1:', errors);
+        return errors
     }
 }
 
