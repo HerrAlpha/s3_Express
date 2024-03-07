@@ -17,7 +17,7 @@ const checkTokenWithAuthorizationUser = async (userId, req, res, next) => {
         console.log('API key from .env:', apiKey);
         console.log('Token from request:', reqToken);
 
-        if (!reqToken || !reqApiKey || !apiKey) {
+        if (reqToken == null || reqApiKey == null || apiKey == null) {
             return false;
         }
 

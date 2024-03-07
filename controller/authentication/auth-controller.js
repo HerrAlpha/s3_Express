@@ -8,7 +8,6 @@ const { checkApiKey, deleteCurrentToken, checkTokenWithAuthorizationUser } = req
 const Validator = require('../../library/validation');
 
 const createToken = async (userId, ability, res) => {
-    try {
         // Check if token already exists for the user
         const existingToken = await Tokens.findOne({ userId: userId });
 
@@ -33,10 +32,7 @@ const createToken = async (userId, ability, res) => {
         await newToken.save();
 
         return token; // Returning the unencrypted token for response
-    } catch (error) {
-        console.error('Error creating token:', error);
-        throw error; // Propagating the error up
-    }
+    
 }
 
 const login = async (req, res) => {
@@ -44,13 +40,17 @@ const login = async (req, res) => {
 
     const validation = new Validator();
 
-    const validationInput = validation.validate({
+    validation.validate({
         username: username,
         password: password
     }, {
         username: 'required|string|alpha|between:3,16',
         password: 'required|string|alpha_num|between:8,16'
     }, res);
+
+    if (validation.statusValidation === false) {
+        return get422(res, validation.errorInfo); // Return 422 if validation fails
+    }
 
     if (!username || !password) {
         return get401(res);
@@ -59,7 +59,6 @@ const login = async (req, res) => {
         return get401(res);
     }
 
-    try {
         const user = await Users.findOne({ username: username });
         console.log('password:', user.password);
         const decryptedPassword = decrypt(user.password, user.username);
@@ -68,7 +67,6 @@ const login = async (req, res) => {
         if (decryptedPassword !== password) {
             return get401(res);
         }
-
 
         if (!user) {
             return get401(res); // User not found, return 401
@@ -91,18 +89,15 @@ const login = async (req, res) => {
 
         console.log('Token:', token);
         return postLogin201(res, user, token);
-    } catch (error) {
-        console.error('Error during login:', error);
-        return get401(res);
-    }
 }
+
 const register = async (req, res) => {
 
     const { username, password } = req.body;
 
     const validation = new Validator();
 
-    const validationInput = validation.validate({
+    validation.validate({
         username: username,
         password: password
     }, {
@@ -110,11 +105,14 @@ const register = async (req, res) => {
         password: 'required|string|alpha_num|between:8,16'
     }, res);
 
+    if (validation.statusValidation === false) {
+        return get422(res, validation.errorInfo); // Return 422 if validation fails
+    }
+
     if (!checkApiKey(req, res)) {
         return get401(res);
     }
     
-    try {
         const keyUsername = String(username);
         const encryptedPassword = encrypt(password, keyUsername);
         const newUser = new Users({ 
@@ -123,10 +121,6 @@ const register = async (req, res) => {
          });
         await newUser.save();
         return post201(res, newUser);
-    } catch (error) {
-        console.error('Error during registration:', error);
-        return get422(res, 'User already existed!');
-    }
 }
 
 
@@ -137,13 +131,8 @@ const logout = async (req, res) => {
     if (!statusToken) {
         return get401(res);
     }
-    try {
         await deleteCurrentToken(req, userId); // Use await to delete the token
         return get200(res, 'User logged out successfully!');
-    } catch (error) {
-        console.error('Error during logout:', error);
-        return get422(res, 'User already logged out!');
-    }
 }
 
 module.exports = { login, register, logout };
