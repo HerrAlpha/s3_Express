@@ -35,6 +35,8 @@ const uploadFile = async (req, res) => {
     }
     const { originalname, buffer, mimetype } = req.file;
 
+    console.log(`${warning.info}  mimetype: ${mimetype}`)
+
     // SECOND CHECKING VALIDATION
     validation.validate({
       author: author,
@@ -47,7 +49,7 @@ const uploadFile = async (req, res) => {
       file: 'required|file',
       originalname: 'required|string',
       buffer: 'required|file_size:500MB',
-      mimetype: 'required|file_extension:video/mp4,image/jpg,image/jpeg,image/png,application/octet-stream'
+      mimetype: 'required|file_extension:video/mp4,image/jpg,image/jpeg,image/png,application/zip'
     }, res);
       
     if (validation.statusValidation === false) {
@@ -163,7 +165,6 @@ const downloadFile = async (req, res) => {
 
     // Pipe the stream to the response object
     readableStream.pipe(res);
-
 };
 
 const deleteFile = async (req, res) => {
@@ -184,7 +185,6 @@ const deleteFile = async (req, res) => {
   }
 
   // Check if authorization token exists
-
   if (checkTokenWithAuthorizationUser(author, req, res) === false) {
     return get401(res);
   }
@@ -197,15 +197,22 @@ const deleteFile = async (req, res) => {
   }
 
   // Delete all chunks associated with the parent document
-  await Chunk.deleteMany({ parentId: parent._id });
+  const deleteChunksResult = await Chunk.deleteMany({ parentId: parent._id });
+  if (deleteChunksResult.deletedCount === 0) {
+    console.error('Error deleting chunks');
+    return get500(res); // Return 500 Internal Server Error
+  }
 
   // Delete the parent document
-
-  await Parent.findByIdAndDelete(fileId);
+  const deleteParentResult = await Parent.findByIdAndDelete(fileId);
+  if (!deleteParentResult) {
+    console.error('Error deleting file:', fileId);
+    return get500(res); // Return 500 Internal Server Error
+  }
 
   return delete200(res);
-
 };
+
 
 
 module.exports = { uploadFile, downloadFile, deleteFile };
