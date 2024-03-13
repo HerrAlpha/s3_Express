@@ -7,6 +7,9 @@ const { text } = require('express');
 const { checkTokenWithAuthorizationUser } = require('../../security/token-checking');
 const Validator = require('../../library/validation');
 const { warning, basic, style, reset } = require('../../library/console-style');
+const jwt = require('jsonwebtoken');
+const Ottokens = require('../../model/ottoken');
+
 
 const uploadFile = async (req, res) => {
 
@@ -110,6 +113,7 @@ const uploadFile = async (req, res) => {
 const uploadPrecentageNotif = (uploadPercentage) => {
   console.log(`Uploaded ${uploadPercentage}%......${basic.green}✔${reset}`);
 }
+
 const downloadFile = async (req, res) => {
     const {author} = req.body;
     console.log('Author:', author);
@@ -167,6 +171,72 @@ const downloadFile = async (req, res) => {
     readableStream.pipe(res);
 };
 
+const downloadFileV2 = async (req, res) => {
+
+  const { tokenId, token } = req.params;
+    let tokenRecord;
+
+    if (tokenId && token) {
+      tokenRecord = await Ottokens.findOne({ token: token, _id: tokenId });
+
+      if (!tokenRecord) {
+        console.log('Token not found');
+        // Don't return error immediately, proceed without token
+      }
+    }
+
+    let fileId;
+    if (tokenRecord) {
+      fileId = tokenRecord.fileId;
+    } else {
+      // If no token or token not found, get the fileId from some other source
+      // For example, you might retrieve it from the request body or query parameters
+      // fileId = req.body.fileId;
+      // Or
+      // fileId = req.query.fileId;
+      // Adjust this part according to your application's logic
+    }
+
+    // Find the parent document
+    const parent = await Parent.findById(fileId);
+    if (!parent) {
+      console.log('File not found:', fileId);
+      return get404(res, 'File not found');
+    }
+
+    // Set Content-Type header based on the file's contentType
+    res.set('Content-Type', parent.contentType);
+
+    // Fetch all chunks associated with the parent document in parallel
+    const chunksPromise = Chunk.find({ parentId: parent._id }).sort({ index: 1 });
+    const chunks = await chunksPromise;
+
+    // Calculate total file size
+    const totalFileSize = chunks.reduce((acc, chunk) => acc + chunk.data.length, 0);
+
+    // Set Content-Range header to inform client about the range being sent
+    res.setHeader('Content-Range', `bytes 0-${totalFileSize - 1}/${totalFileSize}`);
+    res.setHeader('Accept-Ranges', 'bytes');
+
+    // Set Content-Length header to the length of the concatenated data
+    res.setHeader('Content-Length', totalFileSize);
+
+    // Stream the data to the client
+    const readableStream = new Readable();
+
+    // Push initial chunks to the stream
+    for (const chunk of chunks) {
+      readableStream.push(chunk.data);
+    }
+
+    // Signal the end of the stream
+    readableStream.push(null);
+
+    // Pipe the stream to the response object
+    readableStream.pipe(res);
+
+};
+
 const deleteFile = async (req, res) => {
   const { author, fileId } = req.body;
 
@@ -213,9 +283,109 @@ const deleteFile = async (req, res) => {
   return delete200(res);
 };
 
+const deleteToken = async (req, res) => {
+  const { tokenId, userId } = req.body;
+
+  const validation = new Validator();
+
+  validation.validate({
+    userId: userId,
+    tokenId: tokenId
+  }, {
+    userId: 'required|string|alpha_num',
+    tokenId: 'required|string|alpha_num'
+  }, res);
+
+  if (checkTokenWithAuthorizationUser(userId, req, res) === false) {
+    return get401(res);
+  }
 
 
-module.exports = { uploadFile, downloadFile, deleteFile };
+  const tokenRecord = await Ottokens.findById(tokenId);
+
+  if (!tokenRecord) {
+    console.log('Token not found');
+    return get404(res, 'Token not found');
+  }
+
+  // Delete the token
+
+  const deleteResult = await Ottokens.findByIdAndDelete(tokenId);
+  if (!deleteResult) {
+    console.error('Error deleting token:', tokenId);
+    return get500(res); // Return 500 Internal Server Error
+  }
+
+  return delete200(res);
+}
+
+const createOneTimeToken = async (req, res) => {
+  // Check if token already exists for the user
+  const { userId, fileId } = req.body;
+
+  const validation = new Validator();
+
+  validation.validate({
+    userId: userId,
+    fileId: fileId
+  }, {
+    userId: 'required|string|alpha_num',
+    fileId: 'required|string|alpha_num'
+  }, res);
+
+  if (checkTokenWithAuthorizationUser(userId, req, res) === false) {
+    return get401(res);
+  }
+
+  if (validation.statusValidation === false) {
+    return get422(res, validation.errorInfo); // Return 422 if validation fails
+  }
+
+  const ability = 'user';
+
+  const token = jwt.sign({ userId, ability }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+  // Creating a new Token instance
+  const newToken = new Ottokens({
+      userId: userId,
+      token: token,
+      ability: ability,
+      fileId: fileId
+  });
+
+  // Saving the new token to the database
+  await newToken.save();
+
+  const result = {
+    token: token,
+    tokenId: newToken._id
+  }
+
+  return post201(res, result); // Returning the unencrypted token for response
+
+}
+
+const checkAndDeleteToken = async (res, userId, fileId, token) => {
+  const tokenRecord = await Ottokens.findOne({ userId: userId, fileId: fileId, token: token });
+
+  if (!tokenRecord) {
+    console.log('Token not found');
+    return get404(res, 'Token not found');
+  }
+
+  // Delete the token
+  const deleteResult = await Ottokens.findByIdAndDelete(tokenRecord._id);
+  if (!deleteResult) {
+    console.error('Error deleting token:', tokenRecord._id);
+    return get500(res); // Return 500 Internal Server Error
+  }
+
+  return delete200('Token deleted successfully');
+}
+
+
+
+module.exports = { uploadFile, downloadFile, deleteFile, createOneTimeToken, downloadFileV2, deleteToken };
 
 
 
